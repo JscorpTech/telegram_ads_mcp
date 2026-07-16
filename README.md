@@ -111,7 +111,7 @@ longer valid — re-run `telegram-ads-auth` to refresh it.
 | Env var | Purpose |
 |---------|---------|
 | `TELEGRAM_ADS_AUTH_STATE` | Absolute path to the saved Playwright session file. Overrides the default lookup (`~/.config/telegram-ads-mcp/auth_state.json`, falling back to `./auth_state.json` in the current directory). |
-| `TELEGRAM_ADS_ACCOUNT` | Substring match against the account name shown on the Telegram Ads "Choose Account" screen, used to select which account's ads the tools operate on. |
+| `TELEGRAM_ADS_ACCOUNT` | Substring match against the account name shown on the Telegram Ads "Choose Account" screen, used to select which account's ads the tools operate on. Optional when your login has exactly one account; required when multiple accounts are available. |
 
 ## Limitations
 

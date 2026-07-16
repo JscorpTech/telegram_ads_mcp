@@ -38,6 +38,35 @@ class DryRunResult:
         return {"dry_run": True, "action": self.action, **self.params}
 
 
+def choose_account(
+    accounts: list[dict[str, str]], preferred_name: str | None
+) -> dict[str, str]:
+    """Pick an account by substring match, or auto-select when unambiguous."""
+    if not accounts:
+        raise ValueError("No accounts available")
+
+    if preferred_name:
+        needle = preferred_name.lower()
+        match = next(
+            (a for a in accounts if needle in a["name"].lower()),
+            None,
+        )
+        if match is None:
+            names = ", ".join(a["name"] for a in accounts)
+            raise ValueError(
+                f"Account '{preferred_name}' not found. Available: {names}"
+            )
+        return match
+
+    if len(accounts) == 1:
+        return accounts[0]
+
+    names = ", ".join(a["name"] for a in accounts)
+    raise ValueError(
+        f"TELEGRAM_ADS_ACCOUNT is not set. Set it to one of: {names}"
+    )
+
+
 class TelegramAdsClient:
     def __init__(
         self,
@@ -52,9 +81,7 @@ class TelegramAdsClient:
                 "Run: python -m telegram_ads_mcp.auth_setup"
             )
         self._headless = headless
-        self._account_name = (
-            account_name or os.environ.get("TELEGRAM_ADS_ACCOUNT") or "Artem"
-        )
+        self._account_name = account_name or os.environ.get("TELEGRAM_ADS_ACCOUNT")
         self._p: Playwright | None = None
         self.browser: Browser | None = None
         self.context: BrowserContext | None = None
@@ -154,16 +181,7 @@ class TelegramAdsClient:
         if not accounts:
             raise AuthExpiredError("No accounts available — session may be expired")
 
-        needle = self._account_name.lower()
-        match = next(
-            (a for a in accounts if needle in a["name"].lower()),
-            None,
-        )
-        if match is None:
-            names = ", ".join(a["name"] for a in accounts)
-            raise ValueError(
-                f"Account '{self._account_name}' not found. Available: {names}"
-            )
+        match = choose_account(accounts, self._account_name)
 
         await page.goto(f"{BASE}{match['href']}", wait_until="domcontentloaded")
         await self._dismiss_ad_blocker(page)
