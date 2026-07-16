@@ -36,3 +36,5 @@ target-version = "py311"
 include = ["src"]
 pythonVersion = "3.11"
 typeCheckingMode = "basic"
+venvPath = "."
+venv = ".venv"
