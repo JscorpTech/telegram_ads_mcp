@@ -530,6 +530,13 @@ class TelegramAdsClient:
         *,
         confirm: bool = False,
     ) -> dict[str, Any]:
+        # Dry-run must short-circuit before any Playwright I/O, so the delta is
+        # only computed against the live budget once confirm=True.
+        if dry := self._dry_or_run(
+            "set_budget", {"ad_id": ad_id, "target_budget": target_budget}, confirm=confirm
+        ):
+            return dry
+
         ads = await self.list_ads()
         current = next((a for a in ads if a.get("id") == ad_id), None)
         if current is None:
@@ -539,14 +546,6 @@ class TelegramAdsClient:
             raise ValueError(
                 f"Target budget {target_budget} must exceed current {current['budget']}"
             )
-        params = {
-            "ad_id": ad_id,
-            "target_budget": target_budget,
-            "current_budget": current["budget"],
-            "delta_ton": delta,
-        }
-        if dry := self._dry_or_run("set_budget", params, confirm=confirm):
-            return dry
         return await self.increase_budget(ad_id, delta, confirm=True)
 
     # ------------------------------------------------------------------ stats
