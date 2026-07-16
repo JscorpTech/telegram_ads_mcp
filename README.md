@@ -31,8 +31,8 @@ one-time interactive login step and the Playwright browser install
 straightforward and reproducible.
 
 ```bash
-git clone https://github.com/artemmelnikov/telegram-ads-mcp.git
-cd telegram-ads-mcp
+git clone https://github.com/Free-cat/telegram_ads_mcp.git
+cd telegram_ads_mcp
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
@@ -54,7 +54,7 @@ script inside the venv you just created:
 {
   "mcpServers": {
     "telegram-ads": {
-      "command": "/ABS/PATH/telegram-ads-mcp/.venv/bin/telegram-ads-mcp",
+      "command": "/ABS/PATH/telegram_ads_mcp/.venv/bin/telegram-ads-mcp",
       "env": {
         "TELEGRAM_ADS_ACCOUNT": "Artem",
         "TELEGRAM_ADS_AUTH_STATE": "/ABS/PATH/to/auth_state.json"
@@ -72,7 +72,7 @@ works for Claude Desktop's `claude_desktop_config.json`.
 If you'd rather not clone, you can install directly from git:
 
 ```bash
-pip install "git+https://github.com/artemmelnikov/telegram-ads-mcp.git"
+pip install "git+https://github.com/Free-cat/telegram_ads_mcp.git"
 playwright install chromium
 ```
 

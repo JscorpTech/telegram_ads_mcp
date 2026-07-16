@@ -8,8 +8,8 @@ Playwright client, or the packaging/docs/tests around them.
 ## Dev setup
 
 ```bash
-git clone https://github.com/artemmelnikov/telegram-ads-mcp.git
-cd telegram-ads-mcp
+git clone https://github.com/Free-cat/telegram_ads_mcp.git
+cd telegram_ads_mcp
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
