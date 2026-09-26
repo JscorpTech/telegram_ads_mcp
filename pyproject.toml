@@ -1,17 +1,43 @@
 [project]
 name = "telegram-ads-mcp"
-version = "0.1.0"
+# Version is single-sourced from src/telegram_ads_mcp/__init__.py via
+# [tool.hatch.version] below, so the server reports the same version it ships.
+dynamic = ["version"]
 description = "MCP server for Telegram Ads via Playwright"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
+authors = [{ name = "telegram-ads-mcp contributors" }]
+keywords = ["mcp", "model-context-protocol", "telegram", "ads", "playwright", "automation"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  # Deliberately NOT "Production/Stable": this drives a live ad account's spend.
+  "Typing :: Typed",
+]
+
+# Upper bound is load-bearing. mcp 2.0 renamed `FastMCP` to `MCPServer` and
+# deleted `mcp.server.fastmcp`; an unbounded lower bound therefore installs an
+# SDK this code cannot import. v1.x is still maintained for anyone who needs it.
 dependencies = [
-  "mcp>=1.0.0",
+  "mcp>=2.2,<3",
   "playwright>=1.40.0",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.6", "pyright>=1.1"]
+
+[project.urls]
+Repository = "https://github.com/Free-cat/telegram_ads_mcp"
+Issues = "https://github.com/Free-cat/telegram_ads_mcp/issues"
+Changelog = "https://github.com/Free-cat/telegram_ads_mcp/blob/master/CHANGELOG.md"
 
 [project.scripts]
 telegram-ads-mcp = "telegram_ads_mcp.mcp_server:main"
@@ -21,16 +47,62 @@ telegram-ads-auth = "telegram_ads_mcp.auth_setup:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "src/telegram_ads_mcp/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/telegram_ads_mcp"]
+
+[tool.hatch.build.targets.sdist]
+# The session file is credential-equivalent and local scratch state is not
+# part of the release; ship exactly what is tracked in git.
+include = [
+  "/src",
+  "/tests",
+  "/docs",
+  "/.github",
+  "/CHANGELOG.md",
+  "/CONTRIBUTING.md",
+  "/LICENSE",
+  "/README.md",
+  "/SECURITY.md",
+  "/pyproject.toml",
+]
+exclude = ["/auth_state.json", "/**/auth_state.json", "/.serena", "/.venv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["live: hits real ads.telegram.org (disabled by default)"]
+filterwarnings = ["error::DeprecationWarning:telegram_ads_mcp.*"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.ruff.lint]
+# Ruff 0.16 expanded its default rule set from 59 to 413 rules, which turned a
+# previously-clean `ruff check` red. Pin the selection explicitly so the gate
+# means the same thing on every machine.
+select = [
+  "E",     # pycodestyle errors
+  "W",     # pycodestyle warnings
+  "F",     # pyflakes
+  "I",     # isort
+  "UP",    # pyupgrade
+  "B",     # flake8-bugbear
+  "S",     # flake8-bandit
+  "ASYNC", # flake8-async
+  "RUF",   # ruff-specific
+]
+ignore = [
+  "E501",  # line length is enforced by the formatter
+  "S101",  # assert is fine in tests
+  "S603",  # no subprocess use in this project
+  "RUF001", # ambiguous unicode in docstrings is intentional prose
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106", "S107", "RUF043"]  # fixtures, not real credentials
 
 [tool.pyright]
 include = ["src"]

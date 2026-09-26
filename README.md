@@ -1,10 +1,12 @@
+<!-- mcp-name: io.github.Free-cat/telegram-ads-mcp -->
 # telegram-ads-mcp
 
 An [MCP](https://modelcontextprotocol.io) server that lets AI agents (Cursor,
-Claude Desktop, etc.) read and manage your [Telegram Ads](https://ads.telegram.org)
-campaigns — list accounts and ads, read stats and budgets, and create/update
-ads, CPM, status, and budget — by driving the real ads.telegram.org web UI
-through Playwright with a reused, cookie-based login session.
+Claude Desktop, Claude Code, etc.) read and manage your
+[Telegram Ads](https://ads.telegram.org) campaigns — list accounts and ads,
+read stats and budgets, and create/update ads, CPM, status, and budget — by
+driving the real ads.telegram.org web UI through Playwright with a reused,
+cookie-based login session.
 
 > **⚠️ Security warning**
 >
@@ -12,11 +14,8 @@ through Playwright with a reused, cookie-based login session.
 > (`auth_state.json`). That file is equivalent to your login credentials for
 > ads.telegram.org — anyone with it can act as you, **including spending your
 > TON ad budget**. Never commit it, share it, or check it into version
-> control. Mutating and financial tools (`update_ad`, `set_cpm`, `set_status`,
-> `increase_budget`, `set_budget`, `create_ad`, `get_ad_stats_csv`) default to
-> a safe `confirm=False` dry-run and only take effect when an agent explicitly
-> passes `confirm=True`. Read [SECURITY.md](SECURITY.md) before connecting
-> this server to any agent you don't fully trust with your ad spend.
+> control. Read [SECURITY.md](SECURITY.md) before connecting this server to any
+> agent you don't fully trust with your ad spend.
 
 ## Requirements
 
@@ -45,10 +44,43 @@ to Telegram, choose the ads account you want to manage, and save the session.
 It prints the path it saved to (by default
 `~/.config/telegram-ads-mcp/auth_state.json`).
 
-### Cursor configuration
+### Alternative: `uv tool install`
 
-Add the server to your `mcp.json`, using the **absolute path** to the console
-script inside the venv you just created:
+`uv tool install` gives you a stable `telegram-ads-mcp` on your `PATH` without
+cloning. Install the browser into the tool's own environment so it survives
+`uv cache clean`:
+
+```bash
+uv tool install telegram-ads-mcp
+PLAYWRIGHT_BROWSERS_PATH=0 uv tool run --from telegram-ads-mcp playwright install --only-shell chromium
+telegram-ads-auth
+```
+
+`PLAYWRIGHT_BROWSERS_PATH=0` keeps Chromium inside the tool's virtualenv rather
+than a shared cache, and `--only-shell` skips the headed browser — this server
+runs headless.
+
+Plain `uvx telegram-ads-mcp` on every invocation is **not** recommended:
+`uvx` rebuilds an ephemeral environment, which is discarded by `uv cache
+clean`, taking the browser binaries with it.
+
+## Client configuration
+
+### Claude Code
+
+```bash
+claude mcp add telegram-ads \
+  --env TELEGRAM_ADS_ACCOUNT=YourAccountName \
+  -- /ABS/PATH/telegram_ads_mcp/.venv/bin/telegram-ads-mcp
+```
+
+Add `--scope user` to make it available in every project. `claude mcp list`
+verifies it connected.
+
+### Claude Desktop
+
+Edit `claude_desktop_config.json` (`~/Library/Application Support/Claude/` on
+macOS, `%APPDATA%\Claude\` on Windows):
 
 ```json
 {
@@ -56,7 +88,7 @@ script inside the venv you just created:
     "telegram-ads": {
       "command": "/ABS/PATH/telegram_ads_mcp/.venv/bin/telegram-ads-mcp",
       "env": {
-        "TELEGRAM_ADS_ACCOUNT": "Artem",
+        "TELEGRAM_ADS_ACCOUNT": "YourAccountName",
         "TELEGRAM_ADS_AUTH_STATE": "/ABS/PATH/to/auth_state.json"
       }
     }
@@ -64,54 +96,94 @@ script inside the venv you just created:
 }
 ```
 
-Restart Cursor (or reload MCP servers) after adding this. The same shape
-works for Claude Desktop's `claude_desktop_config.json`.
+On Windows, wrap the command as `cmd /c` with `.venv\Scripts\telegram-ads-mcp.exe`.
 
-## Alternative: install via pip + git
+### Cursor
 
-If you'd rather not clone, you can install directly from git:
+Same shape, in `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project):
 
-```bash
-pip install "git+https://github.com/Free-cat/telegram_ads_mcp.git"
-playwright install chromium
+```json
+{
+  "mcpServers": {
+    "telegram-ads": {
+      "command": "/ABS/PATH/telegram_ads_mcp/.venv/bin/telegram-ads-mcp",
+      "env": {
+        "TELEGRAM_ADS_ACCOUNT": "YourAccountName"
+      }
+    }
+  }
+}
 ```
 
-Run `playwright install chromium` **in the same environment/interpreter**
-you installed the package into, so the browser binary is available at
-runtime. Ephemeral environments (e.g. running via `uvx` on every invocation)
-are fragile for this reason — Playwright needs its browser binaries to
-persist between runs — which is why the clone + venv path above is
-recommended for anything beyond a quick try.
+### VS Code
+
+`.vscode/mcp.json` uses a `servers` key rather than `mcpServers`:
+
+```json
+{
+  "servers": {
+    "telegram-ads": {
+      "type": "stdio",
+      "command": "/ABS/PATH/telegram_ads_mcp/.venv/bin/telegram-ads-mcp"
+    }
+  }
+}
+```
+
+Use an **absolute** path to the console script — GUI clients do not inherit
+your shell's `PATH`. Restart the client (or reload MCP servers) after editing.
 
 ## Tools
 
-All mutating/financial tools default to `confirm=False`, which returns a
-structured dry-run preview and makes no changes. Pass `confirm=True` to
-actually execute the action.
+Mutating tools default to `confirm=false`, which returns a structured preview
+of exactly what would happen and touches nothing. Pass `confirm=true` to
+execute. Read-only tools take no `confirm` argument.
 
-| Tool | Type | `confirm` required? | Description |
-|------|------|----------------------|--------------|
-| `list_accounts` | Read | — | List Telegram Ads accounts available for this login session |
-| `list_ads` | Read | — | List all ads with full table columns (id, metrics, budget, status, date) |
-| `get_ad_info` | Read | — | Read ad form fields (targeting chips are read-only for existing ads) |
-| `get_account_budget` | Read | — | Read-only per-ad budgets on `/account/budget` |
-| `update_ad` | Write | Yes (to save) | Update ad info fields (title, text, url, budget, etc.), not CPM/budget delta |
-| `set_cpm` | Write | Yes (to execute) | Set CPM via the `/edit_cpm` modal |
-| `set_status` | Write | Yes (to execute) | Set ad status (Active / On Hold) via the `/edit_status` modal |
-| `increase_budget` | Write (financial) | Yes (to execute) | Add TON to an ad's budget (delta) |
-| `set_budget` | Write (financial) | Yes (to execute) | Set a target budget by computing the delta from the current one |
-| `create_ad` | Write (financial) | Yes (to execute) | Create a new ad; clears the draft by default |
-| `get_ad_stats_csv` | Write (download) | Yes (to execute) | Download the stats CSV for an ad and period |
+Every tool returns structured content (`structuredContent`) alongside a text
+rendering, so clients can parse results programmatically rather than reading
+prose.
 
-Every tool raises a stable `AUTH_EXPIRED` error when the stored session is no
-longer valid — re-run `telegram-ads-auth` to refresh it.
+| Tool | Access | Changes | `confirm` | Description |
+|------|--------|---------|-----------|-------------|
+| `list_accounts` | Read | — | — | List the accounts available to this login session |
+| `list_ads` | Read | — | — | List all ads with metrics, budget, status and date |
+| `get_ad_info` | Read | — | — | Read one ad's form fields and settings |
+| `get_account_budget` | Read | — | — | Read the balance and transaction ledger |
+| `get_ad_stats_csv` | Read | Downloads a CSV | Yes | Download stats for an ad and period |
+| `update_ad` | Write | Edits ad fields | Yes | Update title, text, URL, daily budget, status, etc. |
+| `set_cpm` | Write | Edits CPM | Yes | Set CPM via the `/edit_cpm` modal |
+| `set_status` | Write | Pauses/resumes | Yes | Set status to Active or On Hold |
+| `increase_budget` | Write | **Spends TON** | Yes | Add TON to an ad's budget |
+| `set_budget` | Write | **Spends TON** | Yes | Set a target budget by adding the difference |
+| `create_ad` | Write | **Spends TON** | Yes | Create and fund a new ad |
+
+Every tool returns a stable error `code` when something anticipated goes wrong.
+`AUTH_EXPIRED` means the stored session is gone or rejected — re-run
+`telegram-ads-auth`.
+
+## Safety controls
+
+The `confirm` flag is a decision the *model* makes, so it is not an
+authorization boundary: anything that can instruct your agent can ask it to
+pass `confirm=true`. The controls below come from the environment, which the
+model cannot reach.
+
+| Env var | Effect |
+|---------|--------|
+| `TELEGRAM_ADS_READ_ONLY=1` | Refuse every tool that changes the account, whatever `confirm` says. Read-only tools — including the stats download — keep working. |
+| `TELEGRAM_ADS_MAX_SPEND_TON=5` | Refuse any single budget increase above this many TON. Applies to previews too. |
+
+Set `TELEGRAM_ADS_READ_ONLY=1` when you want an agent to monitor campaigns
+without any possibility of it changing them.
 
 ## Configuration
 
 | Env var | Purpose |
 |---------|---------|
 | `TELEGRAM_ADS_AUTH_STATE` | Absolute path to the saved Playwright session file. Overrides the default lookup (`~/.config/telegram-ads-mcp/auth_state.json`, falling back to `./auth_state.json` in the current directory). |
-| `TELEGRAM_ADS_ACCOUNT` | Substring match against the account name shown on the Telegram Ads "Choose Account" screen, used to select which account's ads the tools operate on. Optional when your login has exactly one account; required when multiple accounts are available. |
+| `TELEGRAM_ADS_ACCOUNT` | Substring match against the account name shown on the "Choose Account" screen, used to select which account's ads the tools operate on. Optional when your login has exactly one account; required when multiple accounts are available. |
+| `TELEGRAM_ADS_READ_ONLY` | See [Safety controls](#safety-controls). |
+| `TELEGRAM_ADS_MAX_SPEND_TON` | See [Safety controls](#safety-controls). |
 
 ## Limitations
 
@@ -119,16 +191,31 @@ longer valid — re-run `telegram-ads-auth` to refresh it.
   does not automate adding TON via Fragment.
 - **Ad Schedule and similar widgets are not automated.** Scheduling and
   "Similar channels/bots" targeting widgets on ads.telegram.org are out of
-  scope for v0.1.
+  scope.
 - **Targeting on existing ads is read-only.** `get_ad_info` can read
   targeting chips, but changing targeting for an already-created ad is not
   supported — targeting is set at creation time via `create_ad`.
+- **One account per process.** The account is chosen when the server starts
+  from `TELEGRAM_ADS_ACCOUNT`; there is no tool to switch accounts mid-session.
+- **Transport is stdio only, and deliberately so.** There is no remote/HTTP
+  transport or Docker image: a local subprocess never binds a network port,
+  and the spec directs stdio servers to take credentials from the environment
+  rather than running an authorization flow.
 - **No live end-to-end tests in CI.** Tests that hit the real
   ads.telegram.org are marked `live`, require a real session, and are never
   run automatically — they need a human with an active account to run them
   locally.
-- **Transport is stdio only.** There is no remote/HTTP transport or Docker
-  image in this release.
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+ruff check src tests && ruff format --check src tests
+pyright
+pytest
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

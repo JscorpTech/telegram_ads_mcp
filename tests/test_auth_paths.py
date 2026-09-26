@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from telegram_ads_mcp.paths import ensure_secure_file, resolve_auth_state_path
 
 
@@ -45,3 +47,32 @@ def test_ensure_secure_file_sets_mode(tmp_path: Path):
     path.write_text("{}")
     ensure_secure_file(path)
     assert (path.stat().st_mode & 0o777) == 0o600
+
+
+def test_ensure_secure_file_creates_with_restrictive_mode(tmp_path: Path):
+    """Created 0600 up front, not touched loosely and chmod-ed afterwards."""
+    path = tmp_path / "sec" / "auth_state.json"
+    ensure_secure_file(path)
+    assert path.exists()
+    assert (path.stat().st_mode & 0o777) == 0o600
+
+
+def test_ensure_secure_file_creates_parent_directory(tmp_path: Path):
+    path = tmp_path / "deep" / "nested" / "auth_state.json"
+    ensure_secure_file(path)
+    assert path.parent.is_dir()
+
+
+def test_ensure_secure_file_refuses_a_symlink(tmp_path: Path):
+    """A planted symlink would redirect credential writes to an attacker's path."""
+    target = tmp_path / "elsewhere.json"
+    target.write_text("{}")
+    target.chmod(0o644)
+    link = tmp_path / "auth_state.json"
+    link.symlink_to(target)
+
+    with pytest.raises(OSError, match="symlink"):
+        ensure_secure_file(link)
+
+    # The real file must be untouched: the chmod did not follow the link.
+    assert (target.stat().st_mode & 0o777) == 0o644

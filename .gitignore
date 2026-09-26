@@ -13,3 +13,8 @@ build/
 *.egg-info/
 .env
 .DS_Store
+
+# Local editor/agent tooling state
+.serena/
+# uv lockfile is committed; ignore only stray caches
+.uv-cache/
