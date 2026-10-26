@@ -3,21 +3,22 @@
 
 from __future__ import annotations
 
-import atexit
 import asyncio
+import atexit
 import json
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from telegram_ads_mcp.exceptions import AuthExpiredError
 from telegram_ads_mcp.client import (
     AdStatus,
+    Currency,
     StatsPeriod,
     TargetType,
     TelegramAdsClient,
 )
+from telegram_ads_mcp.exceptions import AuthExpiredError
 from telegram_ads_mcp.paths import resolve_auth_state_path
 
 mcp = FastMCP("telegram-ads")
@@ -52,7 +53,7 @@ def _shutdown() -> None:
                 loop.create_task(_client.close())
             else:
                 loop.run_until_complete(_client.close())
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - best-effort atexit cleanup
             pass
         _client = None
 
@@ -144,7 +145,7 @@ async def set_status(ad_id: int, status: AdStatus, confirm: bool = False) -> dic
 
 @mcp.tool(annotations=SPEND)
 async def increase_budget(ad_id: int, amount: float, confirm: bool = False) -> dict:
-    """Add TON to ad budget (delta). Financial — requires confirm=True to execute; default is dry-run."""
+    """Add an amount in the selected cabinet currency to ad budget (delta). Financial — requires confirm=True to execute; default is dry-run."""
     try:
         return await (await _get_client()).increase_budget(
             ad_id, amount, confirm=confirm
@@ -195,8 +196,9 @@ async def create_ad(
     status: AdStatus = "Active",
     clear_draft: bool = True,
     confirm: bool = False,
+    currency: Currency | None = None,
 ) -> dict:
-    """Create new ad. Financial — requires confirm=True. Clears draft by default."""
+    """Create ad in cabinet currency (EUR or TON), without conversion. Pass currency to reject a mismatch before editing. Financial: confirm=True required; default is dry-run."""
     try:
         return await (await _get_client()).create_ad(
             title=title,
@@ -204,6 +206,7 @@ async def create_ad(
             url=url,
             cpm=cpm,
             initial_budget=initial_budget,
+            currency=currency,
             target_type=target_type,
             targets=targets,
             website_name=website_name,
@@ -224,6 +227,12 @@ async def get_account_budget() -> dict:
         return await (await _get_client()).get_account_budget()
     except AuthExpiredError as e:
         raise RuntimeError(str(e)) from e
+
+
+@mcp.tool(annotations=READ)
+async def get_create_ad_form() -> dict:
+    """Read cabinet currency and validate creation money fields; no draft edits or spending."""
+    return await (await _get_client()).get_create_ad_form()
 
 
 def main() -> None:

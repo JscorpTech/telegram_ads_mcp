@@ -7,7 +7,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from playwright.async_api import (
     Browser,
@@ -27,6 +27,7 @@ DEFAULT_AUTH_STATE = resolve_auth_state_path()
 TargetType = Literal["search", "bots", "channels"]
 AdStatus = Literal["Active", "On Hold"]
 StatsPeriod = Literal["day", "days", "5min"]
+Currency = Literal["EUR", "TON"]
 
 
 @dataclass
@@ -113,7 +114,7 @@ class TelegramAdsClient:
         self._p = None
         self._account_ready = False
 
-    async def __aenter__(self) -> TelegramAdsClient:
+    async def __aenter__(self) -> Self:
         await self._ensure_started()
         return self
 
@@ -607,6 +608,26 @@ class TelegramAdsClient:
                 raise RuntimeError("Download path is unavailable")
             return Path(path).read_bytes()
 
+    async def _creation_form_info(self, page: Page) -> dict[str, Any]:
+        currencies = []
+        for label, code in (("CPM in Euro", "EUR"), ("CPM in Ton", "TON"),
+                            ("CPM in TON", "TON")):
+            if await page.get_by_text(re.compile(r"^" + re.escape(label) + r"\b")).is_visible():
+                currencies.append(code)
+        if len(set(currencies)) != 1:
+            raise ValueError("Unsupported or ambiguous cabinet currency; no ad submitted")
+        for name in ("cpm", "budget"):
+            field = page.locator(f'input[name="{name}"]')
+            if await field.count() != 1 or not await field.is_visible():
+                raise ValueError(f"Missing or ambiguous {name} field; no ad submitted")
+        return {"currency": currencies[0], "cpm_field": "cpm", "budget_field": "budget"}
+
+    async def get_create_ad_form(self) -> dict[str, Any]:
+        """Inspect currency and money fields without editing or submitting a draft."""
+        async with self._lock:
+            page = await self._goto("/account/ad/new")
+            return await self._creation_form_info(page)
+
     # ------------------------------------------------------------------ create_ad
 
     async def create_ad(
@@ -625,6 +646,7 @@ class TelegramAdsClient:
         status: AdStatus = "Active",
         clear_draft: bool = True,
         confirm: bool = False,
+        currency: Currency | None = None,
     ) -> dict[str, Any]:
         params = {
             "title": title,
@@ -632,6 +654,7 @@ class TelegramAdsClient:
             "url": url,
             "cpm": cpm,
             "initial_budget": initial_budget,
+            "currency": currency,
             "target_type": target_type,
             "targets": targets or [],
             "website_name": website_name,
@@ -646,6 +669,11 @@ class TelegramAdsClient:
         async with self._lock:
             page = await self._goto("/account/ad/new")
 
+            form_info = await self._creation_form_info(page)
+            if currency is not None and form_info["currency"] != currency:
+                raise ValueError(f"Currency mismatch: requested {currency}, cabinet uses "
+                                 f"{form_info['currency']}; no ad submitted")
+
             if clear_draft:
                 clear = page.get_by_role("link", name="Clear Draft")
                 if await clear.count() == 0:
@@ -653,7 +681,9 @@ class TelegramAdsClient:
                 if await clear.count() > 0 and await clear.first.is_visible():
                     await clear.first.click()
 
-            await page.get_by_role("radio", name=target_type).check()
+            await page.locator("label").filter(
+                has=page.locator(f'input[name="target_type"][value="{target_type}"]')
+            ).click()
             await page.get_by_placeholder("E.g., My first ad").fill(title)
             await page.get_by_placeholder("Enter your ad text").fill(text)
             await page.get_by_placeholder(
@@ -667,8 +697,8 @@ class TelegramAdsClient:
             if show_bot_picture:
                 await page.get_by_label("Show bot picture").check()
 
-            await page.get_by_placeholder("0.00").first.fill(str(cpm))
-            await page.get_by_label("Initial budget in Ton").fill(str(initial_budget))
+            await page.locator('input[name="cpm"]').fill(str(cpm))
+            await page.locator('input[name="budget"]').fill(str(initial_budget))
             await page.get_by_role("radio", name=str(daily_views_limit)).check()
             await (
                 page.locator("label", has_text="Initial status")
@@ -693,7 +723,8 @@ class TelegramAdsClient:
             if errors:
                 return {"ok": False, "errors": errors}
 
-            return {"ok": True, "ad_id": new_id, "title": title}
+            return {"ok": True, "ad_id": new_id, "title": title,
+                    "currency": form_info["currency"]}
 
     async def _add_targets(
         self, page: Page, target_type: TargetType, targets: list[str]

@@ -9,7 +9,7 @@ _AD_ID_RE = re.compile(r"/account/ad/(\d+)")
 
 def parse_int_commas(value: str) -> int:
     cleaned = re.sub(r"[,\s]", "", value.strip())
-    if not cleaned or cleaned == "-":
+    if not cleaned or cleaned in {"-", "–", "—"}:
         return 0
     return int(cleaned)
 

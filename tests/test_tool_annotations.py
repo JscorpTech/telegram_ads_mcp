@@ -9,7 +9,7 @@ def _tools_by_name():
 
 def test_read_tools_marked_readonly():
     tools = _tools_by_name()
-    for name in ("list_accounts", "list_ads", "get_ad_info", "get_account_budget"):
+    for name in ("list_accounts", "list_ads", "get_ad_info", "get_account_budget", "get_create_ad_form"):
         ann = tools[name].annotations
         assert ann is not None
         assert ann.readOnlyHint is True

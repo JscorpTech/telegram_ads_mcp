@@ -133,3 +133,13 @@ longer valid — re-run `telegram-ads-auth` to refresh it.
 ## License
 
 [MIT](LICENSE)
+
+## Cabinet currencies (EUR / TON)
+
+`get_create_ad_form` reads the selected cabinet currency and validates the CPM
+and initial-budget fields without editing or submitting a draft. `create_ad`
+accepts an optional `currency` (`EUR` or `TON`): a mismatch or unsupported form
+is rejected before editing. Amounts are in the cabinet currency, with no exchange
+conversion. Use `currency="EUR"` for euro cabinets. `confirm=False` still returns
+a preview without contacting the platform; this is not a live validation.
+Creating ads and allocating budget still require explicit operator approval.

@@ -15,3 +15,8 @@ def test_extract_ad_id():
     assert extract_ad_id("/account/ad/3/stats") == 3
     assert extract_ad_id("https://ads.telegram.org/account/ad/7") == 7
     assert extract_ad_id("/choose_account/x") is None
+
+
+def test_missing_metric_unicode_dashes():
+    for value in ('–', '—', '-'):
+        assert parse_int_commas(value) == 0
