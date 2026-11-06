@@ -686,9 +686,11 @@ class TelegramAdsClient:
             ).click()
             await page.get_by_placeholder("E.g., My first ad").fill(title)
             await page.get_by_placeholder("Enter your ad text").fill(text)
-            await page.get_by_placeholder(
-                "URL of the channel, post or bot you promote"
-            ).fill(url)
+            promote_url = page.locator('input[name="promote_url"]')
+            await promote_url.wait_for(state="visible", timeout=10_000)
+            await promote_url.fill(url)
+            if await promote_url.input_value() != url:
+                raise RuntimeError("Promoted URL did not stick; no ad submitted")
 
             if website_name:
                 await page.get_by_placeholder("Name of the promoted website").fill(
@@ -699,13 +701,23 @@ class TelegramAdsClient:
 
             await page.locator('input[name="cpm"]').fill(str(cpm))
             await page.locator('input[name="budget"]').fill(str(initial_budget))
-            await page.get_by_role("radio", name=str(daily_views_limit)).check()
-            await (
+            # The animated budget wrapper overlaps this radio hit target, so
+            # a pointer click can miss even with force=True. Use the native
+            # input click and verify the resulting selection before submitting.
+            views_radio = page.get_by_role("radio", name=str(daily_views_limit))
+            await views_radio.evaluate("(el) => el.click()")
+            if not await views_radio.is_checked():
+                raise RuntimeError("Daily views radio did not become selected")
+            # The status radio is in the same animated form; avoid an overlaid
+            # pointer target and fail closed if the requested state does not stick.
+            status_radio = (
                 page.locator("label", has_text="Initial status")
                 .locator("..")
                 .get_by_role("radio", name=status)
-                .check()
             )
+            await status_radio.evaluate("(el) => el.click()")
+            if not await status_radio.is_checked():
+                raise RuntimeError(f"Initial status radio did not select {status}")
 
             if targets:
                 await self._add_targets(page, target_type, targets)

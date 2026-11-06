@@ -12,8 +12,12 @@ def make_form(currency):
     field.count = AsyncMock(return_value=1)
     field.is_visible = AsyncMock(return_value=True)
     field.fill = AsyncMock()
+    field.wait_for = AsyncMock()
+    field.input_value = AsyncMock(return_value="t.me/test")
     field.click = AsyncMock()
     field.check = AsyncMock()
+    field.evaluate = AsyncMock()
+    field.is_checked = AsyncMock(return_value=True)
     field.first = field
     field.filter.return_value = field
     field.locator.return_value = field
@@ -72,6 +76,8 @@ def test_eur_create_uses_named_budget_field_and_returns_currency():
     page.locator.assert_any_call('input[name="cpm"]')
     page.locator.assert_any_call('input[name="budget"]')
     field.fill.assert_any_await('1')
+    assert field.evaluate.await_count == 2  # views and initial status
+    assert field.is_checked.await_count == 2
 
 
 def test_eur_dry_run_does_not_open_form():
